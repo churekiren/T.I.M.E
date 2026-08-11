@@ -1,6 +1,6 @@
 ﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowRight, CheckCircle2, Fingerprint } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { EmblemCapture } from '../components/EmblemCapture'
 import { SectionHead } from '../components/Layout'
 import { useAsyncResource } from '../hooks/useAsyncResource'
@@ -11,6 +11,7 @@ const EMPTY_EMBLEM = { source: '', cropped: '' }
 
 export function Register() {
   const [params] = useSearchParams()
+  const navigate = useNavigate()
   const registrationToken = params.get('token') || ''
   const accessResource = useAsyncResource(
     () => registrationToken ? centralRegistry.inspectAccess(registrationToken) : Promise.resolve(null),
@@ -42,6 +43,10 @@ export function Register() {
       const registration = await centralRegistry.registerNew({ rawToken: registrationToken, codename, emblem: emblem.cropped, emblemProcessingMs: emblem.processingMs, onTiming: (timings) => { if (mountedRef.current) setDiagnostics(timings) } })
       if (mountedRef.current) { setDiagnostics(registration.timings); setResult({ ...registration, accessToken: { token: registrationToken } }) }
     } catch (submitError) {
+      if (submitError.code === 'ACCESS_CREDENTIAL_ALREADY_USED') {
+        navigate(`/access/${encodeURIComponent(registrationToken)}`, { replace: true })
+        return
+      }
       if (mountedRef.current) {
         setError(submitError.message); setDiagnostics(submitError.registrationTimings || null)
       }
