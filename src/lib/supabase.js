@@ -24,7 +24,12 @@ export const isSupabaseConfigured = Boolean(supabaseUrl && publishableKey)
 
 export const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl, publishableKey, {
-      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        experimental: { passkey: true },
+      },
       realtime: { params: { eventsPerSecond: 10 } },
       global: { fetch: fetchWithTimeout },
     })
