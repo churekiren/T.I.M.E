@@ -1,7 +1,11 @@
+import { useState } from 'react'
 import { BadgePlus, KeyRound, Pencil, QrCode, Search, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SectionHead } from '../components/Layout'
 import { StaffSessionBar } from '../components/StaffSessionBar'
+import { EmblemPlaceholder } from '../components/EmblemPlaceholder'
+import { campConfig } from '../config/campConfig'
+import { useFieldAgentSearch } from '../hooks/useFieldAgentSearch'
 
 const operations = [
   [Search, '找探員', '依 Codename、T-xxx、永久 Agent ID 或 REG 編號查找。'],
@@ -13,5 +17,6 @@ const operations = [
 ]
 
 export function Staff() {
-  return <><StaffSessionBar label="FIELD OPERATIONS CONSOLE" /><SectionHead eyebrow="FIELD OPERATIONS // CURRENT MISSION" title="現場任務作業台">選擇現場發生的狀況。所有修正都會留下局方作業紀錄。</SectionHead><div className="field-operation-grid">{operations.map(([Icon,title,description]) => <button type="button" className="field-operation" key={title}><Icon /><strong>{title}</strong><span>{description}</span></button>)}</div><Link className="button button--ghost" to="/wall">查看目前 Session Wall</Link></>
+  const [query, setQuery] = useState(''); const search = useFieldAgentSearch(query, campConfig.currentSessionId)
+  return <><StaffSessionBar label="FIELD OPERATIONS CONSOLE" /><SectionHead eyebrow="FIELD OPERATIONS // CURRENT MISSION" title="現場任務作業台">先找回探員狀態，再選擇需要處理的現場問題。</SectionHead><div className="search-box"><Search /><input value={query} onChange={(event) => setQuery(event.target.value.toUpperCase())} placeholder="搜尋 Codename、T-xxx、Agent ID 或 REG-xxxx" /><kbd>FIELD</kbd></div>{search.error && <p className="admin-message">{search.error}</p>}<div className="result-list">{search.results.map((agent) => <article className="result-card" key={agent.id}><div className="result-emblem">{agent.emblem ? <img src={agent.emblem} alt="" /> : <EmblemPlaceholder />}</div><div><span>{agent.id}</span><strong>{agent.codename}</strong><small>{agent.currentEnrollment ? `${agent.currentEnrollment.displayAgentNumber} // ${agent.currentEnrollment.completionStatus}` : '尚未加入目前梯次'} // 徽章{agent.emblemPath ? '已完成' : '未完成'}</small></div></article>)}</div><div className="field-operation-grid">{operations.map(([Icon,title,description]) => <button type="button" className="field-operation" key={title}><Icon /><strong>{title}</strong><span>{description}</span></button>)}</div><Link className="button button--ghost" to="/wall">查看目前 Session Wall</Link></>
 }

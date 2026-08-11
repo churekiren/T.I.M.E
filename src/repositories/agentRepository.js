@@ -31,4 +31,25 @@ export const agentRepository = {
     const agent = { ...data.agent, emblem: await emblemRepository.createSignedUrl(data.agent.emblemPath) }
     return { state: 'USED', authorizedSessionId: data.authorizedSessionId, agent, missions: data.missions || [] }
   },
+  async fieldSearch(query, sessionId) {
+    const rows = await runQuery((client) => client.rpc('search_field_agents', { p_query: query, p_session_id: sessionId }))
+    return Promise.all((rows || []).map(async (row) => ({
+      id: row.permanent_agent_id,
+      codename: row.codename,
+      emblemPath: row.emblem_path,
+      emblem: await emblemRepository.createSignedUrl(row.emblem_path),
+      firstRegisteredAt: row.first_registered_at,
+      status: row.agent_status,
+      matchingShortCode: row.matching_short_code,
+      currentEnrollment: row.current_enrollment_id ? {
+        id: row.current_enrollment_id,
+        displayAgentNumber: row.current_display_agent_number,
+        completionStatus: row.current_enrollment_status,
+        returningAgent: row.current_returning_agent,
+        joinedAt: row.current_joined_at,
+        sessionId,
+      } : null,
+      missions: row.mission_history || [],
+    })))
+  },
 }
