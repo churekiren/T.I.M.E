@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { BadgePlus, CheckCircle2, ExternalLink, Printer, Search, ShieldAlert, Ticket } from 'lucide-react'
+import { BadgePlus, CheckCircle2, ExternalLink, Printer, Search, ShieldAlert, Ticket, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SectionHead } from '../components/Layout'
 import { QrCode } from '../components/QrCode'
@@ -37,7 +37,7 @@ export function Admin() {
   if (ceremony) return <section className="success-panel returning-success"><img className="registration-official-emblem" src={assetUrl('assets/time-emblem.png')} alt="T.I.M.E. 正式局徽" /><div className="success-mark"><CheckCircle2 /></div><span className="eyebrow">IDENTITY MATCH CONFIRMED</span><h1>RETURNING AGENT VERIFIED</h1><h2>回歸探員身分確認</h2><p className="success-welcome">WELCOME BACK, AGENT {ceremony.agent.codename}.</p>{ceremony.agent.emblem && <img className="success-emblem" src={ceremony.agent.emblem} alt="探員徽章" />}<div className="receipt"><span>AGENT NUMBER<strong>{ceremony.enrollment.displayAgentNumber}</strong></span><span>CODENAME<strong>{ceremony.agent.codename}</strong></span><span>CLASS<strong>RETURNING AGENT</strong></span></div><button className="button" onClick={() => setCeremony(null)}>返回管理終端</button></section>
   return <><SectionHead eyebrow="BUREAU ADMINISTRATION // AUTHORIZED" title="任務與探員管理終端">目前作業梯次：{current.name}。所有正式資料均以 Supabase 為準。</SectionHead>
     <div className="admin-stats"><span>ALL AGENTS<strong>{summary.data?.agents ?? '—'}</strong></span><span>SESSIONS<strong>{sessions.length}</strong></span><span>CURRENT ENROLLMENTS<strong>{summary.data?.roster ?? '—'}</strong></span></div>
-    <div className="admin-quick-links"><Link className="button button--ghost" target="_blank" to={`/wall?session=${encodeURIComponent(current.id)}`}><ExternalLink size={16} />開啟此梯投影牆</Link></div>
+    <div className="admin-quick-links"><Link className="button button--ghost" to="/admin/staff"><Users size={16} />工作人員管理</Link><Link className="button button--ghost" target="_blank" to={`/wall?session=${encodeURIComponent(current.id)}`}><ExternalLink size={16} />開啟此梯投影牆</Link></div>
     {message && <p className="admin-message">{message}</p>}
 
     <section className="token-console"><header><div><span>UNIVERSAL REGISTRATION CREDENTIALS</span><h2>通用首次入局憑證</h2><p>建立時不屬於任何 Session；掃描進入 Waiting Pool，Staff 授權時才正式綁定。</p></div><Ticket /></header>{localOnlyOrigin && <div className="qr-origin-warning"><strong>目前使用本機網址開啟管理端。</strong><span>請改用區域網路 IP 開啟後再產生供手機使用的 QR。</span></div>}<div className="token-actions"><div className="token-presets">{[1,5,10].map((count) => <button className={Number(tokenCount) === count ? 'is-active' : ''} type="button" key={count} onClick={() => setTokenCount(count)}>{count} 張</button>)}<label>自訂<input type="number" min="1" max="500" value={tokenCount} onChange={(event) => setTokenCount(event.target.value)} /></label></div><button className="button" disabled={localOnlyOrigin || creatingTokens} onClick={createTokens}>{creatingTokens ? '正在產生……' : '產生通用憑證'}</button></div>

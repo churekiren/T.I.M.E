@@ -1,0 +1,5 @@
+.admin-quick-links{gap:10px;flex-wrap:wrap}
+.staff-role{color:var(--gold);font:9px ui-monospace,monospace;letter-spacing:.1em}
+.staff-role--owner,.staff-role--admin{color:var(--ivory)}
+.staff-directory .button:disabled{opacity:.48;cursor:not-allowed}
+@media(max-width:720px){.admin-quick-links .button{width:100%}.staff-role{margin:4px 0 8px}}

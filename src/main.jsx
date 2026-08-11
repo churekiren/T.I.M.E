@@ -4,6 +4,7 @@ import App from './App'
 import './styles.css'
 import './styles/token.css'
 import './styles/passkey.css'
+import './styles/staff-security.css'
 import { centralRegistry } from './services/centralRegistry'
 import { StaffAuthProvider } from './auth/StaffAuthContext'
 
