@@ -52,4 +52,10 @@ export const agentRepository = {
       missions: row.mission_history || [],
     })))
   },
+  async deletePermanently(permanentAgentId) {
+    return runQuery((client) => client.rpc('delete_agent_permanently', { p_permanent_agent_id: permanentAgentId }))
+  },
+  async resequencePermanentIds() {
+    return runQuery((client) => client.rpc('resequence_permanent_agent_ids'))
+  },
 }

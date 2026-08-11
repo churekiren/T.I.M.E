@@ -41,4 +41,13 @@ export const emblemRepository = {
     const data = await runQuery((client) => client.storage.from(BUCKET).createSignedUrl(path, expiresIn))
     return data?.signedUrl || ''
   },
+  async removeByPrefixes(prefixes) {
+    for (const prefix of prefixes.filter(Boolean)) {
+      if (/\.[a-z0-9]+$/i.test(prefix)) { await this.remove([prefix]); continue }
+      const folder = prefix.replace(/\/$/, '')
+      const objects = await runQuery((client) => client.storage.from(BUCKET).list(folder, { limit: 1000 }))
+      const paths = (objects || []).filter((item) => item.name).map((item) => `${folder}/${item.name}`)
+      if (paths.length) await this.remove(paths)
+    }
+  },
 }

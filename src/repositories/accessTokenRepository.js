@@ -16,4 +16,8 @@ export const accessTokenRepository = {
     const rows = await runQuery((client) => client.rpc('create_registration_tokens', { p_session_id: sessionId, p_count: Number(count) }))
     return (rows || []).map((row) => ({ id: row.id, rawToken: row.raw_token, shortCode: row.short_code, sessionId: row.session_id, status: row.status, createdAt: row.created_at }))
   },
+  async getMetadataBySession(sessionId) {
+    const rows = await runQuery((client) => client.rpc('list_registration_token_metadata', { p_session_id: sessionId }))
+    return (rows || []).map((row) => ({ id: row.id, shortCode: row.short_code, sessionId: row.session_id, status: row.status, purpose: row.purpose, createdAt: row.created_at, usedAt: row.used_at, permanentAgentId: row.permanent_agent_id, codename: row.codename }))
+  },
 }

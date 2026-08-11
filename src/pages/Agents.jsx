@@ -2,11 +2,11 @@ import { useState } from 'react'
 import { Search, BadgeCheck } from 'lucide-react'
 import { SectionHead } from '../components/Layout'
 import { EmblemPlaceholder } from '../components/EmblemPlaceholder'
-import { campConfig } from '../config/campConfig'
 import { useFieldAgentSearch } from '../hooks/useFieldAgentSearch'
+import { useWorkingSession } from '../auth/WorkingSessionContext'
 
 export function Agents() {
-  const [query, setQuery] = useState(''); const { results, loading, error } = useFieldAgentSearch(query, campConfig.currentSessionId)
+  const { sessionId } = useWorkingSession(); const [query, setQuery] = useState(''); const { results, loading, error } = useFieldAgentSearch(query, sessionId)
   return <><SectionHead eyebrow="AUTHORIZED ARCHIVE QUERY // TERMINAL Q-02" title="探員檔案查詢">輸入 Codename、永久 Agent ID、本梯 T-xxx 或 REG 簡短編號。</SectionHead>
     <div className="search-box"><Search /><input value={query} onChange={(event) => setQuery(event.target.value.toUpperCase())} placeholder="搜尋 SHEN、T-001、AGENT-000001 或 REG-0002" autoFocus /><kbd>SEARCH</kbd></div>
     <div className="result-meta"><span>ARCHIVE RESULTS</span><strong>{loading ? '讀取中' : `${String(results.length).padStart(2, '0')} 筆`}</strong></div>
