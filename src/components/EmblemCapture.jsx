@@ -7,6 +7,7 @@ const DEFAULT_REMOVAL = 58
 // Keep the output canvas square for Storage/presentation compatibility; pixels outside
 // this oval are transparent.
 const EMBLEM_VIEWPORT = { x: .18, y: .10, width: .64, height: .80 }
+const MASK_EDGE_INSET = OUTPUT_SIZE * .008
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
@@ -29,8 +30,8 @@ function applyEmblemMask(canvas) {
   context.ellipse(
     OUTPUT_SIZE * (EMBLEM_VIEWPORT.x + EMBLEM_VIEWPORT.width / 2),
     OUTPUT_SIZE * (EMBLEM_VIEWPORT.y + EMBLEM_VIEWPORT.height / 2),
-    OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2,
-    OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2,
+    OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2 - MASK_EDGE_INSET,
+    OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2 - MASK_EDGE_INSET,
     0, 0, Math.PI * 2,
   )
   context.fill()
@@ -50,6 +51,7 @@ function estimatePaperColor(pixels, width, height) {
     for (let x = 0; x < width; x += 4) {
       if (x > border && x < width - border && y > border && y < height - border) continue
       const index = (y * width + x) * 4
+      if (pixels[index + 3] === 0) continue
       const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
       const brightness = .2126 * r + .7152 * g + .0722 * b
       const chroma = Math.max(r, g, b) - Math.min(r, g, b)
@@ -132,8 +134,9 @@ export function EmblemCapture({ value, onChange }) {
     const started = performance.now()
     const canvas = buildCroppedCanvas()
     if (!canvas) return
+    applyEmblemMask(canvas)
     removePaperBackground(canvas, strength)
-    setResult(applyEmblemMask(canvas).toDataURL('image/png'))
+    setResult(canvas.toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
     setProcessingMs(elapsed)
     if (import.meta.env.DEV) console.info(`[T.I.M.E. registration] emblem processing: ${elapsed}ms`)
