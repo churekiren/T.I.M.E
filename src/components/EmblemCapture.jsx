@@ -7,7 +7,10 @@ const DEFAULT_REMOVAL = 58
 // Keep the output canvas square for Storage/presentation compatibility; pixels outside
 // this oval are transparent.
 const EMBLEM_VIEWPORT = { x: .18, y: .10, width: .64, height: .80 }
-const MASK_EDGE_INSET = OUTPUT_SIZE * .008
+// Production paper reference: the printed oval sits about 24–27 px inside the
+// nominal guide after alignment. Keep the valid area just inside that ink line.
+const MASK_EDGE_INSET = 28
+const TEMPLATE_STAR = { centerX: .5, centerY: .164, radiusX: .04, radiusY: .045 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
@@ -32,6 +35,23 @@ function applyEmblemMask(canvas) {
     OUTPUT_SIZE * (EMBLEM_VIEWPORT.y + EMBLEM_VIEWPORT.height / 2),
     OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2 - MASK_EDGE_INSET,
     OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2 - MASK_EDGE_INSET,
+    0, 0, Math.PI * 2,
+  )
+  context.fill()
+  context.restore()
+  return canvas
+}
+
+function excludeFixedTemplateElements(canvas) {
+  const context = canvas.getContext('2d')
+  context.save()
+  context.globalCompositeOperation = 'destination-out'
+  context.beginPath()
+  context.ellipse(
+    OUTPUT_SIZE * TEMPLATE_STAR.centerX,
+    OUTPUT_SIZE * TEMPLATE_STAR.centerY,
+    OUTPUT_SIZE * TEMPLATE_STAR.radiusX,
+    OUTPUT_SIZE * TEMPLATE_STAR.radiusY,
     0, 0, Math.PI * 2,
   )
   context.fill()
@@ -193,6 +213,7 @@ export function EmblemCapture({ value, onChange }) {
     const canvas = buildCroppedCanvas()
     if (!canvas) return
     applyEmblemMask(canvas)
+    excludeFixedTemplateElements(canvas)
     removePaperBackground(canvas, strength)
     setResult(canvas.toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
