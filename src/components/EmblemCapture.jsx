@@ -14,7 +14,7 @@ const TEMPLATE_STAR = { centerX: .5, centerY: .164, radiusX: .04, radiusY: .045 
 // Printed paper oval, expressed relative to the nominal emblem ellipse radii.
 // The narrow band covers the press line plus camera antialiasing/soft focus,
 // without moving the valid-area boundary inward.
-const PRINTED_ELLIPSE_RING = { innerScale: .872, outerScale: .922 }
+const PRINTED_ELLIPSE_RING = { innerScale: .680, outerScale: .735 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
