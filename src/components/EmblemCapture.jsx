@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, Check, Crop, ImagePlus, RefreshCw, RotateCcw, SlidersHorizontal } from 'lucide-react'
+import { Camera, Check, Crop, ImagePlus, RefreshCw, RotateCcw, SlidersHorizontal, X } from 'lucide-react'
 
 const OUTPUT_SIZE = 640
 const DEFAULT_REMOVAL = 58
@@ -109,7 +109,10 @@ export function EmblemCapture({ value, onChange }) {
   const [imageReady, setImageReady] = useState(false)
   const [imageSize, setImageSize] = useState({ width: 1, height: 1 })
   const [processingMs, setProcessingMs] = useState(0)
+  const [cameraStream, setCameraStream] = useState(null)
+  const [cameraError, setCameraError] = useState('')
   const imageRef = useRef(null)
+  const videoRef = useRef(null)
   const pointers = useRef(new Map())
   const gesture = useRef({ last: null, distance: 0, zoom: 1 })
 
@@ -138,6 +141,49 @@ export function EmblemCapture({ value, onChange }) {
 
   useEffect(() => { if (phase === 'result') createResult(removalStrength) }, [createResult, phase, removalStrength])
 
+  useEffect(() => {
+    if (phase === 'camera' && videoRef.current && cameraStream) {
+      videoRef.current.srcObject = cameraStream
+      void videoRef.current.play().catch(() => setCameraError('相機預覽無法啟動，請改用系統相機。'))
+    }
+  }, [cameraStream, phase])
+
+  useEffect(() => () => cameraStream?.getTracks().forEach((track) => track.stop()), [cameraStream])
+
+  const stopCamera = () => {
+    cameraStream?.getTracks().forEach((track) => track.stop())
+    setCameraStream(null)
+  }
+
+  const startCamera = async () => {
+    setCameraError('')
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('此瀏覽器不支援網頁相機預覽，請改用系統相機。')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false })
+      setCameraStream(stream)
+      setPhase('camera')
+    } catch {
+      setCameraError('無法取得相機權限，請允許相機存取或改用系統相機。')
+    }
+  }
+
+  const captureCameraFrame = () => {
+    const video = videoRef.current
+    if (!video?.videoWidth || !video.videoHeight) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+    const nextSource = canvas.toDataURL('image/jpeg', .92)
+    stopCamera()
+    setSource(nextSource); setZoom(1); setPosition({ x: 50, y: 50 }); setResult(''); setImageReady(false)
+    setShowCropTools(false); setShowRemovalTools(false); setRemovalStrength(DEFAULT_REMOVAL); setPhase('crop')
+    onChange({ source: nextSource, cropped: '' })
+  }
+
   const readFile = (file) => {
     if (!file) return
     const reader = new FileReader()
@@ -151,6 +197,7 @@ export function EmblemCapture({ value, onChange }) {
   }
 
   const retake = () => {
+    stopCamera()
     setSource(''); setResult(''); setImageReady(false); setPhase('capture'); setZoom(1); setPosition({ x: 50, y: 50 })
     onChange({ source: '', cropped: '' })
   }
@@ -191,11 +238,19 @@ export function EmblemCapture({ value, onChange }) {
   }
 
   if (phase === 'capture') return <div className="emblem-capture emblem-capture--start">
-    <div className="capture-intro"><Camera /><h3>拍攝你的個人識別徽章</h3><p>拍下完整紙張，下一步再將作品對準橢圓框</p></div>
+    <div className="capture-intro"><Camera /><h3>拍攝你的個人識別徽章</h3><p>開啟相機後，將紙上的作品對準橢圓框</p></div>
+    {cameraError && <p className="camera-preview-error">{cameraError}</p>}
     <div className="capture-actions">
-      <label className="button capture-primary"><input type="file" accept="image/*" capture="environment" onChange={(event) => readFile(event.target.files?.[0])} /><Camera size={18} /> 拍攝徽章</label>
+      <button className="button capture-primary" type="button" onClick={startCamera}><Camera size={18} /> 開啟相機預覽</button>
+      {cameraError && <label className="button button--ghost capture-secondary"><input type="file" accept="image/*" capture="environment" onChange={(event) => readFile(event.target.files?.[0])} /><Camera size={18} /> 使用系統相機</label>}
       <label className="button button--ghost capture-secondary"><input type="file" accept="image/*" onChange={(event) => readFile(event.target.files?.[0])} /><ImagePlus size={18} /> 從相簿選擇</label>
     </div>
+  </div>
+
+  if (phase === 'camera') return <div className="emblem-camera-flow">
+    <header><span className="eyebrow">CAMERA ALIGNMENT</span><h3>將徽章放入橢圓框內</h3><p>橢圓內就是最後的個人徽章；相機仍會保留完整矩形畫面。</p></header>
+    <div className="emblem-camera-preview"><video ref={videoRef} autoPlay muted playsInline aria-label="個人徽章相機預覽" /><div className="camera-oval-guide" aria-hidden="true" /><span>橢圓內將成為你的徽章</span></div>
+    <div className="camera-preview-actions"><button className="button" type="button" onClick={captureCameraFrame}><Camera size={18} /> 拍攝</button><button className="text-button" type="button" onClick={retake}><X size={16} /> 取消</button></div>
   </div>
 
   if (phase === 'result') return <div className="emblem-result">
