@@ -72,17 +72,26 @@ function drawFixedTemplateElements(context) {
   context.fill()
 }
 
-function buildTemplateExclusionMask() {
+function buildGeometryMask(drawGeometry) {
   const canvas = document.createElement('canvas')
   canvas.width = OUTPUT_SIZE; canvas.height = OUTPUT_SIZE
   const context = canvas.getContext('2d', { willReadFrequently: true })
   context.fillStyle = '#fff'
-  drawPrintedEllipseRing(context)
-  drawFixedTemplateElements(context)
+  drawGeometry(context)
   const pixels = context.getImageData(0, 0, OUTPUT_SIZE, OUTPUT_SIZE).data
-  const excluded = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
-  for (let index = 0; index < excluded.length; index += 1) excluded[index] = pixels[index * 4 + 3] > 127 ? 1 : 0
-  return excluded
+  const mask = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
+  for (let index = 0; index < mask.length; index += 1) mask[index] = pixels[index * 4 + 3] > 127 ? 1 : 0
+  return mask
+}
+
+function buildTemplateMasks() {
+  const printedRing = buildGeometryMask(drawPrintedEllipseRing)
+  const fixedElements = buildGeometryMask(drawFixedTemplateElements)
+  const analysisIgnored = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
+  for (let index = 0; index < analysisIgnored.length; index += 1) {
+    analysisIgnored[index] = printedRing[index] || fixedElements[index] ? 1 : 0
+  }
+  return { analysisIgnored, fixedElements }
 }
 
 const BACKGROUND_GRID_SIZE = 16
@@ -251,9 +260,9 @@ export function EmblemCapture({ value, onChange }) {
     const canvas = buildCroppedCanvas()
     if (!canvas) return
     applyEmblemMask(canvas)
-    const excluded = buildTemplateExclusionMask()
-    removePaperBackground(canvas, strength, excluded)
-    applyTemplateExclusion(canvas, excluded)
+    const { analysisIgnored, fixedElements } = buildTemplateMasks()
+    removePaperBackground(canvas, strength, analysisIgnored)
+    applyTemplateExclusion(canvas, fixedElements)
     setResult(canvas.toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
     setProcessingMs(elapsed)
