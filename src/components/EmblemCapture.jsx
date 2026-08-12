@@ -46,28 +46,21 @@ function applyEmblemMask(canvas) {
   return canvas
 }
 
-function excludePrintedEllipseRing(canvas) {
+function drawPrintedEllipseRing(context) {
   const { innerScale, outerScale } = PRINTED_ELLIPSE_RING
-  if (!(innerScale > 0 && outerScale > innerScale && outerScale <= 1)) return canvas
-  const context = canvas.getContext('2d')
+  if (!(innerScale > 0 && outerScale > innerScale && outerScale <= 1)) return false
   const centerX = OUTPUT_SIZE * (EMBLEM_VIEWPORT.x + EMBLEM_VIEWPORT.width / 2)
   const centerY = OUTPUT_SIZE * (EMBLEM_VIEWPORT.y + EMBLEM_VIEWPORT.height / 2)
   const radiusX = OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2
   const radiusY = OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2
-  context.save()
-  context.globalCompositeOperation = 'destination-out'
   context.beginPath()
   context.ellipse(centerX, centerY, radiusX * outerScale, radiusY * outerScale, 0, 0, Math.PI * 2)
   context.ellipse(centerX, centerY, radiusX * innerScale, radiusY * innerScale, 0, 0, Math.PI * 2, true)
   context.fill('evenodd')
-  context.restore()
-  return canvas
+  return true
 }
 
-function excludeFixedTemplateElements(canvas) {
-  const context = canvas.getContext('2d')
-  context.save()
-  context.globalCompositeOperation = 'destination-out'
+function drawFixedTemplateElements(context) {
   context.beginPath()
   context.ellipse(
     OUTPUT_SIZE * TEMPLATE_STAR.centerX,
@@ -77,30 +70,43 @@ function excludeFixedTemplateElements(canvas) {
     0, 0, Math.PI * 2,
   )
   context.fill()
-  context.restore()
-  return canvas
+}
+
+function buildTemplateExclusionMask() {
+  const canvas = document.createElement('canvas')
+  canvas.width = OUTPUT_SIZE; canvas.height = OUTPUT_SIZE
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  context.fillStyle = '#fff'
+  drawPrintedEllipseRing(context)
+  drawFixedTemplateElements(context)
+  const pixels = context.getImageData(0, 0, OUTPUT_SIZE, OUTPUT_SIZE).data
+  const excluded = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
+  for (let index = 0; index < excluded.length; index += 1) excluded[index] = pixels[index * 4 + 3] > 127 ? 1 : 0
+  return excluded
 }
 
 const BACKGROUND_GRID_SIZE = 16
 const luminance = (r, g, b) => .2126 * r + .7152 * g + .0722 * b
 
-function pixelLuminance(pixels, width, height, x, y) {
+function pixelLuminance(pixels, width, height, x, y, excluded, fallback) {
   const safeX = clamp(x, 0, width - 1), safeY = clamp(y, 0, height - 1)
   const index = (safeY * width + safeX) * 4
+  if (pixels[index + 3] === 0 || excluded?.[safeY * width + safeX]) return fallback
   return luminance(pixels[index], pixels[index + 1], pixels[index + 2])
 }
 
-function localContrast(pixels, width, height, x, y, radius = 3) {
-  const center = pixelLuminance(pixels, width, height, x, y)
+function localContrast(pixels, width, height, x, y, radius = 3, excluded) {
+  const index = (y * width + x) * 4
+  const center = luminance(pixels[index], pixels[index + 1], pixels[index + 2])
   return Math.max(
-    Math.abs(center - pixelLuminance(pixels, width, height, x - radius, y)),
-    Math.abs(center - pixelLuminance(pixels, width, height, x + radius, y)),
-    Math.abs(center - pixelLuminance(pixels, width, height, x, y - radius)),
-    Math.abs(center - pixelLuminance(pixels, width, height, x, y + radius)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x - radius, y, excluded, center)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x + radius, y, excluded, center)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x, y - radius, excluded, center)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x, y + radius, excluded, center)),
   )
 }
 
-function estimateLocalPaperGrid(pixels, width, height) {
+function estimateLocalPaperGrid(pixels, width, height, excluded) {
   const cells = Array.from({ length: BACKGROUND_GRID_SIZE ** 2 }, () => ({ r: 0, g: 0, b: 0, count: 0 }))
   const cellWidth = width / BACKGROUND_GRID_SIZE, cellHeight = height / BACKGROUND_GRID_SIZE
   let global = { r: 0, g: 0, b: 0, count: 0 }
@@ -108,11 +114,11 @@ function estimateLocalPaperGrid(pixels, width, height) {
   for (let y = 2; y < height - 2; y += 3) {
     for (let x = 2; x < width - 2; x += 3) {
       const index = (y * width + x) * 4
-      if (pixels[index + 3] === 0) continue
+      if (pixels[index + 3] === 0 || excluded[y * width + x]) continue
       const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
       const light = luminance(r, g, b)
       const saturation = (Math.max(r, g, b) - Math.min(r, g, b)) / 255
-      const contrast = localContrast(pixels, width, height, x, y)
+      const contrast = localContrast(pixels, width, height, x, y, 3, excluded)
       if (light < 72 || saturation > .18 || contrast > 18) continue
       const cellX = Math.min(BACKGROUND_GRID_SIZE - 1, Math.floor(x / cellWidth))
       const cellY = Math.min(BACKGROUND_GRID_SIZE - 1, Math.floor(y / cellHeight))
@@ -162,11 +168,11 @@ function smoothstep(edge0, edge1, value) {
   return amount * amount * (3 - 2 * amount)
 }
 
-function removePaperBackground(canvas, strength) {
+function removePaperBackground(canvas, strength, excluded) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
   const pixels = imageData.data
-  const paperGrid = estimateLocalPaperGrid(pixels, canvas.width, canvas.height)
+  const paperGrid = estimateLocalPaperGrid(pixels, canvas.width, canvas.height, excluded)
   const tolerance = .105 + (strength / 100) * .105
   const feather = .13
 
@@ -174,14 +180,14 @@ function removePaperBackground(canvas, strength) {
     for (let x = 0; x < canvas.width; x += 1) {
       const index = (y * canvas.width + x) * 4
       const originalAlpha = pixels[index + 3] / 255
-      if (!originalAlpha) continue
+      if (!originalAlpha || excluded[y * canvas.width + x]) continue
       const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
       const paper = interpolatePaper(paperGrid, canvas.width, canvas.height, x, y)
       const pixelLight = luminance(r, g, b), paperLight = luminance(paper.r, paper.g, paper.b)
       const saturation = (Math.max(r, g, b) - Math.min(r, g, b)) / 255
       const colorDistance = Math.sqrt((r - paper.r) ** 2 + (g - paper.g) ** 2 + (b - paper.b) ** 2) / 441.67
       const darkerThanPaper = Math.max(0, paperLight - pixelLight) / 255
-      const edge = localContrast(pixels, canvas.width, canvas.height, x, y, 2) / 255
+      const edge = localContrast(pixels, canvas.width, canvas.height, x, y, 2, excluded) / 255
       // Low-frequency neutral differences follow the local paper model; chroma and
       // sharp edges protect colored strokes and intentional line work.
       const inkScore = darkerThanPaper * .52 + colorDistance * .38 + saturation * .82 + edge * .9
@@ -197,6 +203,16 @@ function removePaperBackground(canvas, strength) {
   }
   context.putImageData(imageData, 0, 0)
   return canvas.toDataURL('image/png')
+}
+
+function applyTemplateExclusion(canvas, excluded) {
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
+  for (let index = 0; index < excluded.length; index += 1) {
+    if (excluded[index]) imageData.data[index * 4 + 3] = 0
+  }
+  context.putImageData(imageData, 0, 0)
+  return canvas
 }
 
 export function EmblemCapture({ value, onChange }) {
@@ -235,9 +251,9 @@ export function EmblemCapture({ value, onChange }) {
     const canvas = buildCroppedCanvas()
     if (!canvas) return
     applyEmblemMask(canvas)
-    excludePrintedEllipseRing(canvas)
-    excludeFixedTemplateElements(canvas)
-    removePaperBackground(canvas, strength)
+    const excluded = buildTemplateExclusionMask()
+    removePaperBackground(canvas, strength, excluded)
+    applyTemplateExclusion(canvas, excluded)
     setResult(canvas.toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
     setProcessingMs(elapsed)
