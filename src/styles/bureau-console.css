@@ -1,0 +1,19 @@
+.bureau-console{display:grid;grid-template-columns:250px minmax(0,1fr);gap:24px;align-items:start}
+.bureau-sidebar{position:sticky;top:18px;max-height:calc(100vh - 36px);overflow:auto;border:1px solid var(--line);background:rgba(12,13,10,.96)}
+.bureau-sidebar>header{padding:24px 20px;border-bottom:1px solid var(--line)}
+.bureau-sidebar>header strong{display:block;font:400 1.55rem Georgia,serif;letter-spacing:.16em;color:var(--ivory)}
+.bureau-sidebar>header span{display:block;margin-top:7px;font:9px ui-monospace,monospace;letter-spacing:.2em;color:var(--gold)}
+.bureau-sidebar nav>section{padding:18px 12px;border-bottom:1px solid var(--line)}
+.bureau-sidebar nav>section:last-child{border:0}
+.bureau-sidebar nav>section>div{padding:0 8px 9px}
+.bureau-sidebar nav>section>div span,.bureau-sidebar nav>section>div small{display:block}
+.bureau-sidebar nav>section>div span{font-size:.72rem;color:var(--ivory)}
+.bureau-sidebar nav>section>div small{margin-top:4px;font:8px ui-monospace,monospace;letter-spacing:.13em;color:#6f6d65}
+.bureau-sidebar nav a{display:flex;align-items:center;gap:10px;min-height:38px;padding:8px;color:var(--muted);font-size:.72rem;border-left:2px solid transparent;transition:.18s}
+.bureau-sidebar nav a:hover,.bureau-sidebar nav a.is-active{color:var(--ivory);background:rgba(199,164,91,.07);border-left-color:var(--gold)}
+.bureau-sidebar nav a svg{color:var(--gold);flex:0 0 auto}
+.bureau-console-main{min-width:0}
+.bureau-console-content{padding-bottom:28px}
+.bureau-console .staff-session-bar{margin-top:0}
+@media(max-width:980px){.bureau-console{grid-template-columns:1fr}.bureau-sidebar{position:static;max-height:none}.bureau-sidebar nav{display:flex;overflow-x:auto}.bureau-sidebar nav>section{min-width:210px;border-right:1px solid var(--line);border-bottom:0}.bureau-console-main{min-width:0}}
+@media(max-width:720px){.bureau-console{gap:16px}.bureau-sidebar>header{padding:18px}.bureau-sidebar nav>section{min-width:185px;padding:14px 10px}.bureau-sidebar nav a{min-height:42px}.bureau-console .staff-session-bar{margin-top:0}}

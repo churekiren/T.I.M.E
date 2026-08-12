@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import { useStaffAuth } from '../auth/StaffAuthContext'
 import { SectionHead } from '../components/Layout'
-import { StaffSessionBar } from '../components/StaffSessionBar'
 import { staffRepository } from '../repositories'
 
 export function StaffManagement() {
@@ -34,8 +33,7 @@ export function StaffManagement() {
     catch (error) { setMessage(error.message) }
   }
 
-  return <><StaffSessionBar label="BUREAU ADMINISTRATION" />
-    <SectionHead eyebrow={`${profile.role} CLEARANCE // STAFF MANAGEMENT`} title="工作人員權限管理">邀請與管理一般 STAFF；OWNER 與 ADMIN 核心帳號受資料庫保護，不會進入一般變更流程。</SectionHead>
+  return <><SectionHead eyebrow={`${profile.role} CLEARANCE // STAFF MANAGEMENT`} title="工作人員權限管理">邀請與管理一般 STAFF；OWNER 與 ADMIN 核心帳號受資料庫保護，不會進入一般變更流程。</SectionHead>
     <form className="staff-invite" onSubmit={invite}>
       <label>Email<input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
       <label>Role<select value={role} onChange={(event) => setRole(event.target.value)}><option value="STAFF">STAFF</option>{isOwner && <option value="ADMIN">ADMIN</option>}</select></label>
