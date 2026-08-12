@@ -3,10 +3,10 @@ import { Camera, Check, Crop, ImagePlus, RefreshCw, RotateCcw, SlidersHorizontal
 
 const OUTPUT_SIZE = 640
 const DEFAULT_REMOVAL = 58
-// Closest available match to the printed MY EMBLEM field: a horizontal 1.27:1 oval.
+// Match the printed MY EMBLEM field: a vertical oval with a 0.8:1 ratio.
 // Keep the output canvas square for Storage/presentation compatibility; pixels outside
 // this oval are transparent.
-const EMBLEM_VIEWPORT = { x: .08, y: .17, width: .84, height: .66 }
+const EMBLEM_VIEWPORT = { x: .18, y: .10, width: .64, height: .80 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
