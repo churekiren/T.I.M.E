@@ -9,7 +9,7 @@ const sections = [
     [Wallpaper, 'Wall', '/wall', true],
   ] },
   { label: '探員管理', en: 'AGENT DIVISION', items: [
-    [Search, '探員搜尋', '/admin/agents'],
+    [Search, '探員名冊', '/admin/agents'],
     [UserRoundCheck, '探員回歸', '/admin/agents/returning'],
   ] },
   { label: '任務管理', en: 'MISSION MANAGEMENT', items: [
