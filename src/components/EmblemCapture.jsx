@@ -39,28 +39,80 @@ function applyEmblemMask(canvas) {
   return canvas
 }
 
-function median(values) {
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)] || 245
+const BACKGROUND_GRID_SIZE = 16
+const luminance = (r, g, b) => .2126 * r + .7152 * g + .0722 * b
+
+function pixelLuminance(pixels, width, height, x, y) {
+  const safeX = clamp(x, 0, width - 1), safeY = clamp(y, 0, height - 1)
+  const index = (safeY * width + safeX) * 4
+  return luminance(pixels[index], pixels[index + 1], pixels[index + 2])
 }
 
-function estimatePaperColor(pixels, width, height) {
-  const channels = { r: [], g: [], b: [] }
-  const border = Math.max(12, Math.round(width * .12))
-  for (let y = 0; y < height; y += 4) {
-    for (let x = 0; x < width; x += 4) {
-      if (x > border && x < width - border && y > border && y < height - border) continue
+function localContrast(pixels, width, height, x, y, radius = 3) {
+  const center = pixelLuminance(pixels, width, height, x, y)
+  return Math.max(
+    Math.abs(center - pixelLuminance(pixels, width, height, x - radius, y)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x + radius, y)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x, y - radius)),
+    Math.abs(center - pixelLuminance(pixels, width, height, x, y + radius)),
+  )
+}
+
+function estimateLocalPaperGrid(pixels, width, height) {
+  const cells = Array.from({ length: BACKGROUND_GRID_SIZE ** 2 }, () => ({ r: 0, g: 0, b: 0, count: 0 }))
+  const cellWidth = width / BACKGROUND_GRID_SIZE, cellHeight = height / BACKGROUND_GRID_SIZE
+  let global = { r: 0, g: 0, b: 0, count: 0 }
+
+  for (let y = 2; y < height - 2; y += 3) {
+    for (let x = 2; x < width - 2; x += 3) {
       const index = (y * width + x) * 4
       if (pixels[index + 3] === 0) continue
       const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
-      const brightness = .2126 * r + .7152 * g + .0722 * b
-      const chroma = Math.max(r, g, b) - Math.min(r, g, b)
-      if (brightness > 125 && chroma < 105) {
-        channels.r.push(r); channels.g.push(g); channels.b.push(b)
-      }
+      const light = luminance(r, g, b)
+      const saturation = (Math.max(r, g, b) - Math.min(r, g, b)) / 255
+      const contrast = localContrast(pixels, width, height, x, y)
+      if (light < 72 || saturation > .18 || contrast > 18) continue
+      const cellX = Math.min(BACKGROUND_GRID_SIZE - 1, Math.floor(x / cellWidth))
+      const cellY = Math.min(BACKGROUND_GRID_SIZE - 1, Math.floor(y / cellHeight))
+      const cell = cells[cellY * BACKGROUND_GRID_SIZE + cellX]
+      cell.r += r; cell.g += g; cell.b += b; cell.count += 1
+      global.r += r; global.g += g; global.b += b; global.count += 1
     }
   }
-  return { r: median(channels.r), g: median(channels.g), b: median(channels.b) }
+
+  const fallback = global.count
+    ? { r: global.r / global.count, g: global.g / global.count, b: global.b / global.count }
+    : { r: 245, g: 245, b: 245 }
+  let grid = cells.map((cell) => cell.count ? ({ r: cell.r / cell.count, g: cell.g / cell.count, b: cell.b / cell.count }) : null)
+
+  // Fill cells covered by drawings from nearby paper estimates before interpolation.
+  for (let pass = 0; pass < BACKGROUND_GRID_SIZE; pass += 1) {
+    const previous = grid
+    grid = previous.map((cell, index) => {
+      if (cell) return cell
+      const x = index % BACKGROUND_GRID_SIZE, y = Math.floor(index / BACKGROUND_GRID_SIZE)
+      const neighbors = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]
+        .filter(([nx, ny]) => nx >= 0 && nx < BACKGROUND_GRID_SIZE && ny >= 0 && ny < BACKGROUND_GRID_SIZE)
+        .map(([nx, ny]) => previous[ny * BACKGROUND_GRID_SIZE + nx]).filter(Boolean)
+      if (!neighbors.length) return null
+      const sum = neighbors.reduce((total, value) => ({ r: total.r + value.r, g: total.g + value.g, b: total.b + value.b }), { r: 0, g: 0, b: 0 })
+      return { r: sum.r / neighbors.length, g: sum.g / neighbors.length, b: sum.b / neighbors.length }
+    })
+  }
+  return grid.map((cell) => cell || fallback)
+}
+
+function interpolatePaper(grid, width, height, x, y) {
+  const gridX = clamp(x / width * BACKGROUND_GRID_SIZE - .5, 0, BACKGROUND_GRID_SIZE - 1)
+  const gridY = clamp(y / height * BACKGROUND_GRID_SIZE - .5, 0, BACKGROUND_GRID_SIZE - 1)
+  const x0 = Math.floor(gridX), y0 = Math.floor(gridY)
+  const x1 = Math.min(BACKGROUND_GRID_SIZE - 1, x0 + 1), y1 = Math.min(BACKGROUND_GRID_SIZE - 1, y0 + 1)
+  const tx = gridX - x0, ty = gridY - y0
+  const topLeft = grid[y0 * BACKGROUND_GRID_SIZE + x0], topRight = grid[y0 * BACKGROUND_GRID_SIZE + x1]
+  const bottomLeft = grid[y1 * BACKGROUND_GRID_SIZE + x0], bottomRight = grid[y1 * BACKGROUND_GRID_SIZE + x1]
+  const blend = (channel) => (topLeft[channel] * (1 - tx) + topRight[channel] * tx) * (1 - ty)
+    + (bottomLeft[channel] * (1 - tx) + bottomRight[channel] * tx) * ty
+  return { r: blend('r'), g: blend('g'), b: blend('b') }
 }
 
 function smoothstep(edge0, edge1, value) {
@@ -72,28 +124,34 @@ function removePaperBackground(canvas, strength) {
   const context = canvas.getContext('2d', { willReadFrequently: true })
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height)
   const pixels = imageData.data
-  const paper = estimatePaperColor(pixels, canvas.width, canvas.height)
-  const paperLuminance = .2126 * paper.r + .7152 * paper.g + .0722 * paper.b
-  const lowerEdge = .075 + (strength / 100) * .115
-  const upperEdge = lowerEdge + .15
+  const paperGrid = estimateLocalPaperGrid(pixels, canvas.width, canvas.height)
+  const tolerance = .105 + (strength / 100) * .105
+  const feather = .13
 
-  for (let index = 0; index < pixels.length; index += 4) {
-    const originalAlpha = pixels[index + 3] / 255
-    if (!originalAlpha) continue
-    const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
-    const luminance = .2126 * r + .7152 * g + .0722 * b
-    const saturation = (Math.max(r, g, b) - Math.min(r, g, b)) / 255
-    const colorDistance = Math.sqrt((r - paper.r) ** 2 + (g - paper.g) ** 2 + (b - paper.b) ** 2) / 441.67
-    const darkerThanPaper = Math.max(0, paperLuminance - luminance) / 255
-    const inkScore = darkerThanPaper * .9 + colorDistance * .65 + saturation * .35
-    const alpha = smoothstep(lowerEdge, upperEdge, inkScore) * originalAlpha
+  for (let y = 0; y < canvas.height; y += 1) {
+    for (let x = 0; x < canvas.width; x += 1) {
+      const index = (y * canvas.width + x) * 4
+      const originalAlpha = pixels[index + 3] / 255
+      if (!originalAlpha) continue
+      const r = pixels[index], g = pixels[index + 1], b = pixels[index + 2]
+      const paper = interpolatePaper(paperGrid, canvas.width, canvas.height, x, y)
+      const pixelLight = luminance(r, g, b), paperLight = luminance(paper.r, paper.g, paper.b)
+      const saturation = (Math.max(r, g, b) - Math.min(r, g, b)) / 255
+      const colorDistance = Math.sqrt((r - paper.r) ** 2 + (g - paper.g) ** 2 + (b - paper.b) ** 2) / 441.67
+      const darkerThanPaper = Math.max(0, paperLight - pixelLight) / 255
+      const edge = localContrast(pixels, canvas.width, canvas.height, x, y, 2) / 255
+      // Low-frequency neutral differences follow the local paper model; chroma and
+      // sharp edges protect colored strokes and intentional line work.
+      const inkScore = darkerThanPaper * .52 + colorDistance * .38 + saturation * .82 + edge * .9
+      const alpha = smoothstep(tolerance, tolerance + feather, inkScore) * originalAlpha
 
-    if (alpha > .025 && alpha < .98) {
-      pixels[index] = clamp(Math.round((r - paper.r * (1 - alpha)) / alpha), 0, 255)
-      pixels[index + 1] = clamp(Math.round((g - paper.g * (1 - alpha)) / alpha), 0, 255)
-      pixels[index + 2] = clamp(Math.round((b - paper.b * (1 - alpha)) / alpha), 0, 255)
+      if (alpha > .025 && alpha < .98) {
+        pixels[index] = clamp(Math.round((r - paper.r * (1 - alpha)) / alpha), 0, 255)
+        pixels[index + 1] = clamp(Math.round((g - paper.g * (1 - alpha)) / alpha), 0, 255)
+        pixels[index + 2] = clamp(Math.round((b - paper.b * (1 - alpha)) / alpha), 0, 255)
+      }
+      pixels[index + 3] = alpha < .025 ? 0 : Math.round(alpha * 255)
     }
-    pixels[index + 3] = alpha < .025 ? 0 : Math.round(alpha * 255)
   }
   context.putImageData(imageData, 0, 0)
   return canvas.toDataURL('image/png')
