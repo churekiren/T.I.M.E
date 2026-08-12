@@ -11,10 +11,6 @@ const EMBLEM_VIEWPORT = { x: .18, y: .10, width: .64, height: .80 }
 // nominal guide after alignment. Keep the valid area just inside that ink line.
 const MASK_EDGE_INSET = 28
 const TEMPLATE_STAR = { centerX: .5, centerY: .164, radiusX: .04, radiusY: .045 }
-// Printed paper oval, expressed relative to the nominal emblem ellipse radii.
-// The narrow band covers the press line plus camera antialiasing/soft focus,
-// without moving the valid-area boundary inward.
-const PRINTED_ELLIPSE_RING = { innerScale: .680, outerScale: .735 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
 
 export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
@@ -46,20 +42,6 @@ function applyEmblemMask(canvas) {
   return canvas
 }
 
-function drawPrintedEllipseRing(context) {
-  const { innerScale, outerScale } = PRINTED_ELLIPSE_RING
-  if (!(innerScale > 0 && outerScale > innerScale && outerScale <= 1)) return false
-  const centerX = OUTPUT_SIZE * (EMBLEM_VIEWPORT.x + EMBLEM_VIEWPORT.width / 2)
-  const centerY = OUTPUT_SIZE * (EMBLEM_VIEWPORT.y + EMBLEM_VIEWPORT.height / 2)
-  const radiusX = OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2
-  const radiusY = OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2
-  context.beginPath()
-  context.ellipse(centerX, centerY, radiusX * outerScale, radiusY * outerScale, 0, 0, Math.PI * 2)
-  context.ellipse(centerX, centerY, radiusX * innerScale, radiusY * innerScale, 0, 0, Math.PI * 2, true)
-  context.fill('evenodd')
-  return true
-}
-
 function drawFixedTemplateElements(context) {
   context.beginPath()
   context.ellipse(
@@ -82,16 +64,6 @@ function buildGeometryMask(drawGeometry) {
   const mask = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
   for (let index = 0; index < mask.length; index += 1) mask[index] = pixels[index * 4 + 3] > 127 ? 1 : 0
   return mask
-}
-
-function buildTemplateMasks() {
-  const printedRing = buildGeometryMask(drawPrintedEllipseRing)
-  const fixedElements = buildGeometryMask(drawFixedTemplateElements)
-  const analysisIgnored = new Uint8Array(OUTPUT_SIZE * OUTPUT_SIZE)
-  for (let index = 0; index < analysisIgnored.length; index += 1) {
-    analysisIgnored[index] = printedRing[index] || fixedElements[index] ? 1 : 0
-  }
-  return { analysisIgnored, fixedElements }
 }
 
 const BACKGROUND_GRID_SIZE = 16
@@ -260,8 +232,8 @@ export function EmblemCapture({ value, onChange }) {
     const canvas = buildCroppedCanvas()
     if (!canvas) return
     applyEmblemMask(canvas)
-    const { analysisIgnored, fixedElements } = buildTemplateMasks()
-    removePaperBackground(canvas, strength, analysisIgnored)
+    const fixedElements = buildGeometryMask(drawFixedTemplateElements)
+    removePaperBackground(canvas, strength, fixedElements)
     applyTemplateExclusion(canvas, fixedElements)
     setResult(canvas.toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
