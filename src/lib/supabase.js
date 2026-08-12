@@ -47,6 +47,12 @@ const DATABASE_ERROR_MESSAGES = {
   CODENAME_INVALID: '探員代號必須為 2 至 18 個英文字母。',
   EMBLEM_PATH_INVALID: '徽章封存路徑驗證失敗，請重試。',
   STAFF_AUTH_REQUIRED: '管理端尚未取得工作人員授權，無法建立 Supabase 登錄憑證。',
+  SESSION_ID_ALREADY_EXISTS: '此 Session ID 已存在。請使用新的識別碼，原有梯次資料未被修改。',
+  SESSION_NOT_FOUND: '找不到指定的任務梯次，請重新整理後再試。',
+  SESSION_STATUS_TRANSITION_INVALID: '此任務狀態不能直接切換，請依生命週期順序操作。',
+  SESSION_INITIAL_STATUS_INVALID: '新任務必須以 PLANNED 狀態建立。',
+  SESSION_NAME_REQUIRED: '請輸入梯次名稱。',
+  SESSION_DATE_RANGE_INVALID: '結束日期不能早於開始日期。',
 }
 
 export function requireSupabase() {

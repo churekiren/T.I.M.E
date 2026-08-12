@@ -3,7 +3,40 @@ import { Camera, Check, Crop, ImagePlus, RefreshCw, RotateCcw, SlidersHorizontal
 
 const OUTPUT_SIZE = 640
 const DEFAULT_REMOVAL = 58
+// Closest available match to the printed MY EMBLEM field: a horizontal 1.27:1 oval.
+// Keep the output canvas square for Storage/presentation compatibility; pixels outside
+// this oval are transparent.
+const EMBLEM_VIEWPORT = { x: .08, y: .17, width: .84, height: .66 }
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value))
+
+export function calculateImageLayout(naturalWidth, naturalHeight, zoom, position) {
+  const baseScale = Math.max(OUTPUT_SIZE / naturalWidth, OUTPUT_SIZE / naturalHeight)
+  const width = naturalWidth * baseScale * zoom
+  const height = naturalHeight * baseScale * zoom
+  return {
+    width,
+    height,
+    x: (OUTPUT_SIZE - width) * position.x / 100,
+    y: (OUTPUT_SIZE - height) * position.y / 100,
+  }
+}
+
+function applyEmblemMask(canvas) {
+  const context = canvas.getContext('2d')
+  context.save()
+  context.globalCompositeOperation = 'destination-in'
+  context.beginPath()
+  context.ellipse(
+    OUTPUT_SIZE * (EMBLEM_VIEWPORT.x + EMBLEM_VIEWPORT.width / 2),
+    OUTPUT_SIZE * (EMBLEM_VIEWPORT.y + EMBLEM_VIEWPORT.height / 2),
+    OUTPUT_SIZE * EMBLEM_VIEWPORT.width / 2,
+    OUTPUT_SIZE * EMBLEM_VIEWPORT.height / 2,
+    0, 0, Math.PI * 2,
+  )
+  context.fill()
+  context.restore()
+  return canvas
+}
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
@@ -74,6 +107,7 @@ export function EmblemCapture({ value, onChange }) {
   const [removalStrength, setRemovalStrength] = useState(DEFAULT_REMOVAL)
   const [result, setResult] = useState(value?.cropped || '')
   const [imageReady, setImageReady] = useState(false)
+  const [imageSize, setImageSize] = useState({ width: 1, height: 1 })
   const [processingMs, setProcessingMs] = useState(0)
   const imageRef = useRef(null)
   const pointers = useRef(new Map())
@@ -85,12 +119,9 @@ export function EmblemCapture({ value, onChange }) {
     const canvas = document.createElement('canvas')
     canvas.width = OUTPUT_SIZE; canvas.height = OUTPUT_SIZE
     const context = canvas.getContext('2d')
-    const scale = Math.max(OUTPUT_SIZE / image.naturalWidth, OUTPUT_SIZE / image.naturalHeight) * zoom
-    const width = image.naturalWidth * scale, height = image.naturalHeight * scale
-    const x = (OUTPUT_SIZE - width) * position.x / 100, y = (OUTPUT_SIZE - height) * position.y / 100
-    const cropInset = OUTPUT_SIZE * .08, cropScale = 1 / .84
+    const layout = calculateImageLayout(image.naturalWidth, image.naturalHeight, zoom, position)
     context.clearRect(0, 0, OUTPUT_SIZE, OUTPUT_SIZE)
-    context.drawImage(image, (x - cropInset) * cropScale, (y - cropInset) * cropScale, width * cropScale, height * cropScale)
+    context.drawImage(image, layout.x, layout.y, layout.width, layout.height)
     return canvas
   }, [position, source, zoom])
 
@@ -98,7 +129,8 @@ export function EmblemCapture({ value, onChange }) {
     const started = performance.now()
     const canvas = buildCroppedCanvas()
     if (!canvas) return
-    setResult(removePaperBackground(canvas, strength))
+    removePaperBackground(canvas, strength)
+    setResult(applyEmblemMask(canvas).toDataURL('image/png'))
     const elapsed = Math.round(performance.now() - started)
     setProcessingMs(elapsed)
     if (import.meta.env.DEV) console.info(`[T.I.M.E. registration] emblem processing: ${elapsed}ms`)
@@ -159,7 +191,7 @@ export function EmblemCapture({ value, onChange }) {
   }
 
   if (phase === 'capture') return <div className="emblem-capture emblem-capture--start">
-    <div className="capture-intro"><Camera /><h3>拍攝你的個人識別徽章</h3><p>將紙上的徽章完整放入框內</p></div>
+    <div className="capture-intro"><Camera /><h3>拍攝你的個人識別徽章</h3><p>拍下完整紙張，下一步再將作品對準橢圓框</p></div>
     <div className="capture-actions">
       <label className="button capture-primary"><input type="file" accept="image/*" capture="environment" onChange={(event) => readFile(event.target.files?.[0])} /><Camera size={18} /> 拍攝徽章</label>
       <label className="button button--ghost capture-secondary"><input type="file" accept="image/*" onChange={(event) => readFile(event.target.files?.[0])} /><ImagePlus size={18} /> 從相簿選擇</label>
@@ -168,16 +200,16 @@ export function EmblemCapture({ value, onChange }) {
 
   if (phase === 'result') return <div className="emblem-result">
     <header><span className="eyebrow">BACKGROUND REMOVED</span><h3>你的個人識別徽章</h3><p>棋盤格區域代表透明背景</p></header>
-    <div className="transparent-preview"><img src={result} alt="已去除白紙背景的個人識別徽章" /></div>
+    <div className="transparent-preview emblem-oval-preview"><img src={result} alt="已去除白紙背景的橢圓個人識別徽章" /></div>
     <div className="result-actions"><button className="button" type="button" onClick={confirm}><Check size={18} /> 確認徽章</button><button className="text-button" type="button" onClick={retake}><RefreshCw size={15} /> 重新拍攝</button><button className="text-button" type="button" onClick={() => setShowRemovalTools((shown) => !shown)}><SlidersHorizontal size={15} /> 調整去背</button></div>
     {showRemovalTools && <div className="removal-tools"><div><span>保留更多筆跡</span><span>去除更多紙張</span></div><input aria-label="去背強度" type="range" min="0" max="100" value={removalStrength} onChange={(event) => setRemovalStrength(+event.target.value)} /></div>}
   </div>
 
   return <div className="emblem-crop-flow">
-    <header><span className="eyebrow">PHOTO PREVIEW</span><h3>框內就是最後的個人徽章</h3><p>可直接使用；需要時再拖曳、縮放或開啟精細調整。</p></header>
+    <header><span className="eyebrow">EMBLEM ALIGNMENT</span><h3>橢圓內就是最後的個人徽章</h3><p>拖曳照片調整位置，雙指縮放；請將紙上的橢圓作品完整放入中央。</p></header>
     <div className="crop-window crop-window--touch" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerEnd} onPointerCancel={pointerEnd}>
-      <img ref={imageRef} src={source} alt="待裁切的個人識別徽章" onLoad={() => setImageReady(true)} style={{ transform: `scale(${zoom})`, objectPosition: `${position.x}% ${position.y}%` }} />
-      <i /><b /><span className="crop-hint">框內內容將成為徽章</span>
+      <img ref={imageRef} src={source} alt="待裁切的個人識別徽章" onLoad={(event) => { setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight }); setImageReady(true) }} style={(() => { const layout = calculateImageLayout(imageSize.width, imageSize.height, zoom, position); return { width: `${layout.width / OUTPUT_SIZE * 100}%`, height: `${layout.height / OUTPUT_SIZE * 100}%`, left: `${layout.x / OUTPUT_SIZE * 100}%`, top: `${layout.y / OUTPUT_SIZE * 100}%` } })()} />
+      <div className="emblem-oval-mask" aria-hidden="true" /><span className="crop-hint">橢圓內將成為你的徽章</span>
     </div>
     <div className="photo-actions"><button className="button" type="button" disabled={!imageReady} onClick={usePhoto}><Check size={18} /> 使用這張照片</button><button className="text-button" type="button" onClick={retake}><RefreshCw size={15} /> 重新拍攝</button><button className="text-button" type="button" onClick={() => setShowCropTools((shown) => !shown)}><Crop size={15} /> 調整裁切</button></div>
     {showCropTools && <div className="crop-tools crop-tools--advanced">

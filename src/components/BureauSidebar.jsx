@@ -26,7 +26,7 @@ const sections = [
   ] },
 ]
 
-export function BureauSidebar({ wallUrl }) {
+export function BureauSidebar({ wallUrl, wallSession }) {
   const location = useLocation()
   const isActive = (target) => {
     const [pathname, hash = ''] = target.split('#')
@@ -34,7 +34,7 @@ export function BureauSidebar({ wallUrl }) {
   }
   return <aside className="bureau-sidebar"><header><strong>T.I.M.E.</strong><span>BUREAU CONSOLE</span></header><nav aria-label="Bureau Console">
     {sections.map((section) => <section key={section.en}><div><span>{section.label}</span><small>{section.en}</small></div>{section.items.map(([Icon, label, to, wall]) => wall
-      ? <a href={wallUrl} target="_blank" rel="noreferrer" key={label}><Icon size={15} /><span>{label}</span></a>
+      ? <a href={wallUrl} target="_blank" rel="noreferrer" key={label} aria-disabled={!wallSession?.id} onClick={(event) => { if (!wallSession?.id || !window.confirm(`即將開啟 Mission Wall\n\n${wallSession.name}\n${wallSession.id}\n\n請確認這是現場要顯示的梯次。`)) event.preventDefault() }}><Icon size={15} /><span>{label}</span></a>
       : <Link to={to} key={label} className={isActive(to) ? 'is-active' : ''}><Icon size={15} /><span>{label}</span></Link>)}</section>)}
   </nav></aside>
 }

@@ -15,14 +15,14 @@ export function WorkingSessionProvider({ children }) {
     try {
       const rows = await sessionRepository.getOperational()
       setSessions(rows)
-      setSessionIdState((current) => rows.some((item) => item.id === current) ? current : (rows[0]?.id || campConfig.currentSessionId))
+      setSessionIdState((current) => rows.some((item) => item.id === current) ? current : (rows[0]?.id || ''))
       setError('')
     } catch (loadError) { setError(loadError.message) }
     finally { setLoading(false) }
   }
   useEffect(() => { void refresh() }, [])
-  const setSessionId = (value) => { localStorage.setItem(STORAGE_KEY, value); setSessionIdState(value) }
-  const currentSession = sessions.find((item) => item.id === sessionId) || { id: sessionId, name: sessionId, status: 'UNKNOWN' }
+  const setSessionId = (value) => { if (value) localStorage.setItem(STORAGE_KEY, value); else localStorage.removeItem(STORAGE_KEY); setSessionIdState(value) }
+  const currentSession = sessions.find((item) => item.id === sessionId) || { id: '', name: '尚未選擇作業梯次', status: 'UNKNOWN', startDate: null, endDate: null }
   const value = useMemo(() => ({ sessions, sessionId, currentSession, setSessionId, refresh, loading, error }), [sessions, sessionId, currentSession, loading, error])
   return <WorkingSessionContext.Provider value={value}>{children}</WorkingSessionContext.Provider>
 }
