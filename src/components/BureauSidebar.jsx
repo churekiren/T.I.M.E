@@ -1,4 +1,4 @@
-import { Fingerprint, IdCard, LayoutDashboard, Radio, Search, ShieldCheck, Ticket, UserRoundCheck, Users, Wallpaper } from 'lucide-react'
+import { Fingerprint, IdCard, KeyRound, LayoutDashboard, Radio, Search, ShieldCheck, Ticket, UserRoundCheck, Users, Wallpaper } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 
 const sections = [
@@ -23,6 +23,7 @@ const sections = [
   ] },
   { label: '系統', en: 'SYSTEM', items: [
     [Fingerprint, 'Passkey', '/admin/system/passkeys'],
+    [KeyRound, '登入密碼', '/staff/activate'],
   ] },
 ]
 

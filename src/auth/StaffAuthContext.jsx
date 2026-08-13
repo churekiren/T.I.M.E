@@ -3,6 +3,14 @@ import { requireSupabase } from '../lib/supabase'
 
 const StaffAuthContext = createContext(null)
 const PASSKEY_ROLES = new Set(['OWNER', 'ADMIN'])
+const PASSWORD_SETUP_CALLBACK_TYPES = new Set(['invite', 'recovery'])
+let callbackRequiresPasswordSetup = typeof window !== 'undefined' && PASSWORD_SETUP_CALLBACK_TYPES.has(
+  new URLSearchParams(window.location.hash.slice(1)).get('type') || new URLSearchParams(window.location.search).get('type'),
+)
+
+function requiresPasswordSetup(session) {
+  return Boolean(session?.user?.user_metadata?.requires_password_setup || callbackRequiresPasswordSetup)
+}
 
 function passkeyErrorMessage(error) {
   const name = error?.name || error?.cause?.name || ''
@@ -28,14 +36,14 @@ async function loadProfile(session) {
 }
 
 export function StaffAuthProvider({ children }) {
-  const [state, setState] = useState({ session: null, profile: null, loading: true, error: '' })
+  const [state, setState] = useState({ session: null, profile: null, activationRequired: false, loading: true, error: '' })
   const refresh = useCallback(async (sessionOverride) => {
     try {
       const client = requireSupabase()
       const session = sessionOverride === undefined ? (await client.auth.getSession()).data.session : sessionOverride
       const profile = await loadProfile(session)
-      setState({ session, profile, loading: false, error: '' })
-    } catch (error) { setState({ session: null, profile: null, loading: false, error: error.message }) }
+      setState({ session, profile, activationRequired: requiresPasswordSetup(session), loading: false, error: '' })
+    } catch (error) { setState({ session: null, profile: null, activationRequired: false, loading: false, error: error.message }) }
   }, [])
 
   useEffect(() => {
@@ -49,14 +57,14 @@ export function StaffAuthProvider({ children }) {
   const signIn = async (email, password) => {
     setState((current) => ({ ...current, loading: true, error: '' }))
     const { data, error } = await requireSupabase().auth.signInWithPassword({ email: email.trim(), password })
-    if (error) { setState({ session: null, profile: null, loading: false, error: 'Email 或密碼不正確。' }); throw error }
+    if (error) { setState({ session: null, profile: null, activationRequired: false, loading: false, error: 'Email 或密碼不正確。' }); throw error }
     const profile = await loadProfile(data.session)
     if (!profile) {
       await requireSupabase().auth.signOut()
-      setState({ session: null, profile: null, loading: false, error: '未取得 T.I.M.E. 工作人員授權。' })
+      setState({ session: null, profile: null, activationRequired: false, loading: false, error: '未取得 T.I.M.E. 工作人員授權。' })
       return null
     }
-    setState({ session: data.session, profile, loading: false, error: '' })
+    setState({ session: data.session, profile, activationRequired: requiresPasswordSetup(data.session), loading: false, error: '' })
     return profile
   }
   const signInWithPasskey = async () => {
@@ -68,10 +76,10 @@ export function StaffAuthProvider({ children }) {
       const profile = await loadProfile(data.session)
       if (!profile) {
         await requireSupabase().auth.signOut()
-        setState({ session: null, profile: null, loading: false, error: '此帳號沒有有效的 T.I.M.E. 工作人員授權。' })
+        setState({ session: null, profile: null, activationRequired: false, loading: false, error: '此帳號沒有有效的 T.I.M.E. 工作人員授權。' })
         return null
       }
-      setState({ session: data.session, profile, loading: false, error: '' })
+      setState({ session: data.session, profile, activationRequired: requiresPasswordSetup(data.session), loading: false, error: '' })
       return profile
     } catch (error) {
       const safeMessage = error.code === 'PASSKEY_UNAVAILABLE' ? error.message : passkeyErrorMessage(error)
@@ -103,8 +111,21 @@ export function StaffAuthProvider({ children }) {
     const { error } = await requirePasskeyManager().passkey.delete({ passkeyId })
     if (error) throw error
   }
-  const signOut = async () => { await requireSupabase().auth.signOut(); setState({ session: null, profile: null, loading: false, error: '' }) }
-  return <StaffAuthContext.Provider value={{ ...state, signIn, signInWithPasskey, signOut, refresh, listPasskeys, registerPasskey, renamePasskey, deletePasskey }}>{children}</StaffAuthContext.Provider>
+  const completePasswordSetup = async (password) => {
+    if (!state.session || !state.profile) throw new Error('工作人員 Session 已失效，請重新開啟邀請連結。')
+    const metadata = state.session.user.user_metadata || {}
+    const { error } = await requireSupabase().auth.updateUser({
+      password,
+      data: { ...metadata, requires_password_setup: false, password_setup_completed_at: new Date().toISOString() },
+    })
+    if (error) throw error
+    callbackRequiresPasswordSetup = false
+    const session = (await requireSupabase().auth.getSession()).data.session
+    setState({ session, profile: state.profile, activationRequired: false, loading: false, error: '' })
+    return state.profile
+  }
+  const signOut = async () => { await requireSupabase().auth.signOut(); setState({ session: null, profile: null, activationRequired: false, loading: false, error: '' }) }
+  return <StaffAuthContext.Provider value={{ ...state, signIn, signInWithPasskey, signOut, refresh, completePasswordSetup, listPasskeys, registerPasskey, renamePasskey, deletePasskey }}>{children}</StaffAuthContext.Provider>
 }
 
 export function useStaffAuth() {

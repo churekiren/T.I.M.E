@@ -14,10 +14,20 @@ Deno.serve(async (request) => {
   const body = await request.json()
   const email = String(body.email || '').trim().toLowerCase()
   const role = String(body.role || '').trim().toUpperCase()
+  const redirectTo = String(body.redirectTo || '').trim()
   const allowedRoles = profile.role === 'OWNER' ? ['ADMIN', 'STAFF'] : ['STAFF']
   if (!allowedRoles.includes(role)) return new Response(JSON.stringify({ error: 'ROLE_NOT_ALLOWED' }), { status: 403, headers: cors })
+  try {
+    const callback = new URL(redirectTo)
+    if (!['http:', 'https:'].includes(callback.protocol) || !callback.pathname.endsWith('/staff/activate')) throw new Error('invalid callback')
+  } catch {
+    return new Response(JSON.stringify({ error: 'ACTIVATION_REDIRECT_INVALID' }), { status: 400, headers: cors })
+  }
   const admin = createClient(url, serviceKey)
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email)
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo,
+    data: { requires_password_setup: true },
+  })
   if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: cors })
   const { error: provisionError } = await admin.rpc('provision_staff_invitation', {
     p_actor_user_id: profile.userId,

@@ -2,4 +2,5 @@
 .staff-role{color:var(--gold);font:9px ui-monospace,monospace;letter-spacing:.1em}
 .staff-role--owner,.staff-role--admin{color:var(--ivory)}
 .staff-directory .button:disabled{opacity:.48;cursor:not-allowed}
+.staff-activation-panel>svg{color:var(--gold);margin-top:16px}.staff-activation-panel form{margin-top:24px}.staff-activation-panel form .button{width:100%;margin-top:10px}
 @media(max-width:720px){.admin-quick-links .button{width:100%}.staff-role{margin:4px 0 8px}}
