@@ -44,7 +44,6 @@ jobs:
               --write-out '%{http_code}' \
               --request POST \
               --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
-              --header "Authorization: Bearer ${SUPABASE_PUBLISHABLE_KEY}" \
               --header 'Content-Type: application/json' \
               --data '{"p_session_id":"__TIME_READ_ONLY_HEALTH_CHECK__"}' \
               "${SUPABASE_URL%/}/rest/v1/rpc/get_session_wall"
