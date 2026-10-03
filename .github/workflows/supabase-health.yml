@@ -1,0 +1,63 @@
+name: Supabase read-only health check
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: supabase-read-only-health
+  cancel-in-progress: false
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Supabase database RPC
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${SUPABASE_URL:-}" || -z "${SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            echo "Supabase health check failed: required secrets are missing."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          http_status="$({
+            curl \
+              --silent \
+              --connect-timeout 10 \
+              --max-time 30 \
+              --retry 2 \
+              --retry-delay 5 \
+              --retry-all-errors \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "apikey: ${SUPABASE_PUBLISHABLE_KEY}" \
+              --header "Authorization: Bearer ${SUPABASE_PUBLISHABLE_KEY}" \
+              --header 'Content-Type: application/json' \
+              --data '{"p_session_id":"__TIME_READ_ONLY_HEALTH_CHECK__"}' \
+              "${SUPABASE_URL%/}/rest/v1/rpc/get_session_wall"
+          } || true)"
+
+          if [[ "$http_status" != "200" ]]; then
+            echo "Supabase health check failed (HTTP ${http_status:-000})."
+            exit 1
+          fi
+
+          if ! jq -e 'type == "array" and length == 0' "$response_file" >/dev/null; then
+            echo "Supabase health check failed (HTTP 200, unexpected response shape)."
+            exit 1
+          fi
+
+          echo "Supabase health check succeeded (HTTP 200)."
