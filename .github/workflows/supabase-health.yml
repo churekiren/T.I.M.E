@@ -29,6 +29,13 @@ jobs:
             exit 1
           fi
 
+          if [[ "${SUPABASE_URL%/}" != "https://hfgexwpxxccjvxtltvvx.supabase.co" ]]; then
+            echo "Supabase health check failed: configured project does not match expected TIME project."
+            exit 1
+          fi
+
+          echo "TIME project target verified."
+
           response_file="$(mktemp)"
           trap 'rm -f "$response_file"' EXIT
 
